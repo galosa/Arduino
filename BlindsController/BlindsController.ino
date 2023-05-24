@@ -1,11 +1,8 @@
 // Include the required libraries
 #include <Arduino.h> 
 #include <ESP8266WiFi.h> // For Wemos d1 mini - wifi
-// for encoder AS5600
-#include <Wire.h>
-#include <AS5600.h>
-
-AS5600 as5600;
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
 
 
 // Define the pins connected to the L298 motor driver
@@ -13,17 +10,13 @@ const int ENA = D1;   // PWM signal to control motor speed
 const int IN1 = D2;   // Direction control for motor
 const int IN2 = D3;   // Direction control for motor
 
-const int SECOND = 1000;
-// const int BLIND_UP_TIME = 22;
-// const int BLIND_DOWN_TIME = 18;
-const int BLIND_UP_TIME = 3;
-const int BLIND_DOWN_TIME = 3;
-
 // Define the pin for the built-in LED
 const int LED_PIN = LED_BUILTIN;
 
 const char* ssid = "Home";
 const char* password = "";
+
+ESP8266WebServer server(80);
 
 
 // Function to blink the LED a specified number of times
@@ -37,7 +30,7 @@ void blinkLED(int numBlinks, int blink_delay=200) {
 }
 
 void setup() {
-   // Initialize the LED pin as an output
+  // Initialize the LED pin as an output
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, HIGH); // Turn LED off initially
 
@@ -54,70 +47,60 @@ void setup() {
   analogWrite(ENA, 255);
 
   Serial.begin(115200);
-  delay(10);
-  
-  blinkLED(3,100);
-  
+  while(!Serial) {
+    blinkLED(2,100);
+  }
+    
   WiFi.begin(ssid, password);
   
   while (WiFi.status() != WL_CONNECTED) {
     blinkLED(1,200);
+    Serial.println("Connecting to WiFi...");
   }
-  
   Serial.println("");
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 
-  //AS5600
-  Wire.begin(D7, D8);
-  as5600.begin();
-
-
+  // Start HTTP server
+  server.on("/", handleRoot);
+  server.begin();
+  Serial.println("HTTP server started");
 }
 
 void loop() {
-  int angle = 0;
-  // Stop the motor for 1 second
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, LOW);
-  blinkLED(2,100);
-  delay(2);
-  angle = as5600.readAngle();
-  Serial.println("a:" + angle);
-
-  // Turn the motor forward for 2 seconds
-  // Blind going up
-  digitalWrite(IN1, HIGH);
-  digitalWrite(IN2, LOW);
-  blinkLED(2);
-  delay(BLIND_UP_TIME*SECOND);
-
-  angle = as5600.readAngle();
-  Serial.println("b:" + angle);
-
-  // Serial.print("\tω = ");
-  // Serial.println(as5600.getAngularSpeed(AS5600_MODE_RPM));
-
-  // Stop the motor for 1 second
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, LOW);
-  blinkLED(1,500);
-  delay(2*SECOND);
-
-  angle = as5600.readAngle();
-  Serial.println("c:" + angle);
-  // Increase the motor speed for 2 seconds
-  // analogWrite(ENA, 255);
-
-  // Reverse the motor direction for 2 seconds
-  // Blind going up
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, HIGH);
-  blinkLED(3,100);
-  delay(BLIND_DOWN_TIME*SECOND);
-
-    angle = as5600.readAngle();
-  Serial.println("d:" + angle);
+  server.handleClient();
 }
 
+void handleRoot() {
+  // Get the direction, speed, and time from the HTTP request parameters
+  String direction = server.arg("direction");
+  int speed = server.arg("speed").toInt();
+  int time = server.arg("time").toInt();
+
+  // Set the motor direction
+  if (direction == "forward") {
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+  } else if (direction == "backward") {
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, HIGH);
+  } else {
+    // Invalid direction, stop the motor
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, LOW);
+  }
+
+  // Set the motor speed
+  analogWrite(ENA, speed);
+
+  // Wait for the specified time
+  delay(time);
+
+  // Stop the motor
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+
+  // Send a response back to the client
+  server.send(200, "text/plain", "Motor command executed");
+}
