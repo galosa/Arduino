@@ -14,7 +14,7 @@ const int IN2 = D3;   // Direction control for motor
 const int LED_PIN = LED_BUILTIN;
 
 const char* ssid = "Home";
-const char* password = "";
+const char* password = "galosa3323";
 
 ESP8266WebServer server(80);
 
@@ -79,10 +79,10 @@ void handleRoot() {
   int time = server.arg("time").toInt();
 
   // Set the motor direction
-  if (direction == "forward") {
+  if (direction == "up") {
     digitalWrite(IN1, HIGH);
     digitalWrite(IN2, LOW);
-  } else if (direction == "backward") {
+  } else if (direction == "down") {
     digitalWrite(IN1, LOW);
     digitalWrite(IN2, HIGH);
   } else {
